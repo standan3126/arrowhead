@@ -1,5 +1,8 @@
 // Plays Arrowhead in a phone-sized browser: npm test (starts its own server on 4200).
+import { readFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
+
+const FAMILY_CODE = process.env.HUB_CODE ?? readFileSync(new URL('../../hub/private/family-code.txt', import.meta.url), 'utf8').trim()
 
 const start = async (page) => {
   await page.goto('./')
@@ -102,4 +105,75 @@ test('Night mode and arrow colors are remembered', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'night')
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'night')
+})
+
+test('coins: start with 25, arrows pay once, Hint and Burn cost, undoing a Burn refunds it', async ({ page }) => {
+  await start(page)
+  await expect(page.locator('#home-coins')).toHaveText('25')
+  await page.locator('#play-simple').click()
+  await expect(page.locator('#coach')).toBeVisible() // the first lesson
+  await page.locator('#coach-ok').click()
+  const coins = () => page.evaluate(() => window.arrowhead.save.coins)
+  const a = await freeArrow(page)
+  const pays = await page.evaluate((a) => window.arrowhead.current.board.arrows[a].cells.length <= 4 ? 1 : 2, a)
+  await tapArrow(page, a)
+  expect(await coins()).toBe(25 + pays)
+  await page.locator('#undo').click()
+  await tapArrow(page, a)
+  expect(await coins()).toBe(25 + pays) // paid once only
+
+  await page.locator('#hint').click()
+  expect(await coins()).toBe(15 + pays)
+  const hinted = await page.evaluate(() => window.arrowhead.view.hint)
+  expect(await page.evaluate((h) => window.arrowhead.current.board.isFree(h), hinted)).toBe(true)
+  await page.locator('#hint').click() // same hint again: free
+  expect(await coins()).toBe(15 + pays)
+
+  await page.locator('#burn').click()
+  await expect(page.locator('#toast')).toContainText('costs 30') // not enough coins yet
+  await page.evaluate(() => (window.arrowhead.save.coins = 100))
+  await page.locator('#burn').click()
+  await expect(page.locator('#burn')).toHaveAttribute('aria-pressed', 'true')
+  const stuck = await blockedArrow(page)
+  await tapArrow(page, stuck)
+  expect(await coins()).toBe(70)
+  expect(await page.evaluate((s) => window.arrowhead.current.board.arrows[s].gone, stuck)).toBe(true)
+  await page.locator('#undo').click()
+  expect(await coins()).toBe(100)
+  expect(await page.evaluate((s) => window.arrowhead.current.board.arrows[s].gone, stuck)).toBe(false)
+})
+
+test('transfer code carries levels and coins; hidden tools set progress', async ({ page }) => {
+  await start(page)
+  await page.evaluate(() => {
+    window.arrowhead.save.coins = 77
+    window.arrowhead.save.paths.simple.level = 9
+  })
+  await page.locator('#home-settings').click()
+  await page.locator('#make-code').click()
+  const code = await page.locator('#code').inputValue()
+  expect(code).toMatch(/^GH1\.arrowhead\./)
+
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  await page.locator('.hub-start').click()
+  await expect(page.locator('#home-coins')).toHaveText('25')
+  await page.locator('#home-settings').click()
+  await page.locator('#enter-code').click()
+  await page.locator('#code').fill(code)
+  await page.locator('#use-code').click()
+  await expect(page.locator('#message')).toHaveText('Progress restored.')
+  await expect(page.locator('#home-coins')).toHaveText('77')
+  await expect(page.locator('#simple-level')).toHaveText('Level 9')
+
+  await expect(page.locator('#manual-section')).toBeHidden()
+  for (let i = 0; i < 5; i++) await page.locator('#settings-heading').click()
+  await page.locator('.hub-secret input').fill(FAMILY_CODE)
+  await page.locator('.hub-secret button').click()
+  await expect(page.locator('#manual-section')).toBeVisible()
+  await page.locator('#manual-simple').fill('40')
+  await page.locator('#manual-coins').fill('500')
+  await page.locator('#set-manual').click()
+  await expect(page.locator('#home-coins')).toHaveText('500')
+  await expect(page.locator('#simple-level')).toHaveText('Level 40')
 })

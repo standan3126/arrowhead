@@ -68,18 +68,27 @@ test('heavy arrows slide and stay; Calm mode bounces them back', () => {
   assert.equal(b.at(3, 0), -1)
 })
 
-test('undo goes back step by step and takes the coins back', () => {
+test('undo goes back step by step; each arrow pays only once', () => {
   const b = new Board(level())
   b.tap(0)
   b.tap(3)
   assert.equal(b.coins, 2)
   b.undo()
   assert.equal(b.arrows[3].gone, false)
-  assert.equal(b.coins, 1)
+  assert.equal(b.coins, 2)
+  assert.equal(b.tap(3).coins, 0)
   b.undo()
-  assert.equal(b.coins, 0)
+  b.undo()
   assert.equal(b.undo(), null)
   assert.equal(b.left, 4)
+  assert.equal(b.tap(0).coins, 0)
+})
+
+test('undoing a burn says what it cost', () => {
+  const b = new Board(level())
+  b.burn(2, 30)
+  assert.equal(b.undo().price, 30)
+  assert.equal(b.arrows[2].gone, false)
 })
 
 test('a saved board restores exactly', () => {

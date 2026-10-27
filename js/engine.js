@@ -10,6 +10,8 @@
 //   heavy    slide up to whatever is in the way and STAY there (only when heavy rules are on)
 //
 // Every change goes on the history, so undo can always go back to the start of the level.
+// Each arrow pays its coins once per level: undoing it and sending it out again pays nothing,
+// so undo never takes coins back (and the wallet never goes below zero).
 
 export const DIRS = [
   [0, -1], // up
@@ -58,7 +60,8 @@ export class Board {
     this.occ = new Int32Array(w * h).fill(-1)
     for (const a of this.arrows) this.place(a)
     this.history = []
-    this.coins = 0 // earned on this board so far (undo takes them back)
+    this.coins = 0 // earned on this board so far
+    this.paid = new Set() // arrows that have already paid
   }
 
   place(a) {
@@ -126,7 +129,8 @@ export class Board {
     const { free, blocker, room } = this.look(id)
     const cells = a.cells.map((c) => c.slice())
     if (free) {
-      const coins = coinsFor(a.cells.length)
+      const coins = this.paid.has(id) ? 0 : coinsFor(a.cells.length)
+      this.paid.add(id)
       this.lift(a)
       a.gone = true
       this.coins += coins
@@ -145,13 +149,14 @@ export class Board {
     return { kind: 'bump', id, cells, room, blocker }
   }
 
-  // Remove any arrow, free or not (the Burn power-up). Pays no coins.
-  burn(id) {
+  // Remove any arrow, free or not (the Burn power-up). Pays no coins. price is remembered so
+  // undoing the burn can give it back.
+  burn(id, price = 0) {
     const a = this.arrows[id]
     if (!a || a.gone) return null
     this.lift(a)
     a.gone = true
-    this.history.push({ k: 'burn', id })
+    this.history.push({ k: 'burn', id, price })
     return { kind: 'burn', id, cells: a.cells.map((c) => c.slice()) }
   }
 
@@ -169,7 +174,6 @@ export class Board {
     }
     a.gone = false
     this.place(a)
-    if (step.k === 'exit') this.coins -= step.coins
     return { ...step, cells: a.cells.map((c) => c.slice()) }
   }
 
@@ -180,11 +184,11 @@ export class Board {
     this.arrows.forEach((a, id) => {
       if (!a.gone && JSON.stringify(a.cells) !== JSON.stringify(this.start[id])) moved[id] = a.cells
     })
-    return { history: this.history, moved, coins: this.coins }
+    return { history: this.history, moved, coins: this.coins, paid: [...this.paid] }
   }
 
   // Replays a saved record onto a fresh board of the same level.
-  restore({ history = [], moved = {}, coins = 0 }) {
+  restore({ history = [], moved = {}, coins = 0, paid = [] }) {
     for (const step of history) {
       const a = this.arrows[step.id]
       if (!a) continue
@@ -202,6 +206,7 @@ export class Board {
     }
     this.history = history.slice()
     this.coins = coins
+    this.paid = new Set(paid)
   }
 }
 

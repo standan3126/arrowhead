@@ -13,7 +13,7 @@ Play: https://standan3126.github.io/arrowhead/
 | `js/shapes.js` | The shapes, as masks on a grid |
 | `js/levels.js` | Level n of each path, always the same board |
 | `js/draw-simple.js`, `js/board-view.js` | Drawing, zoom and pan, animations |
-| `js/main.js` | Screens, settings, saves |
+| `js/main.js` | Screens, settings, coins, Hint and Burn, lessons, saves and moving progress |
 | `tools/check-levels.mjs` | Checks the first 300 levels can be cleared and never change |
 
 ```
