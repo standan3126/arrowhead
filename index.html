@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en" data-theme="black">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Arrowhead · GameHub</title>
+    <meta name="theme-color" content="#faf8f3" />
+    <link rel="stylesheet" href="/shared/v1/kit.css" />
+    <link rel="stylesheet" href="css/game.css" />
+  </head>
+  <body>
+    <main id="home" class="screen">
+      <header class="home-head">
+        <h1>Arrowhead</h1>
+        <p class="soft">Tap an arrow with a clear way out. Clear the whole picture.</p>
+      </header>
+      <div class="paths">
+        <button type="button" class="path-card" id="play-simple">
+          <span class="path-name">Simple Arrows</span>
+          <span class="path-level" id="simple-level">Level 1</span>
+        </button>
+        <div class="path-card path-soon" aria-disabled="true">
+          <span class="path-name">Arrowhead</span>
+          <span class="path-level">Coming soon</span>
+        </div>
+      </div>
+      <button type="button" class="pill" id="home-settings">Settings</button>
+    </main>
+
+    <section id="play" class="screen" hidden>
+      <canvas id="board" aria-label="The puzzle board. Tap an arrow to send it off the board."></canvas>
+      <div class="top-bar">
+        <p class="level-label"><span id="level-name">Level 1</span> · <span id="left">0</span> left</p>
+      </div>
+      <p id="toast" class="toast" role="status"></p>
+      <nav class="bottom-bar">
+        <button type="button" id="go-home" class="tool"><span aria-hidden="true">⌂</span>Levels</button>
+        <button type="button" id="undo" class="tool"><span aria-hidden="true">↶</span>Undo</button>
+        <button type="button" id="fit" class="tool"><span aria-hidden="true">⤢</span>See all</button>
+        <button type="button" id="play-settings" class="tool"><span aria-hidden="true">⚙</span>Settings</button>
+      </nav>
+      <div id="done" class="done" hidden>
+        <div class="done-card">
+          <h2 id="done-title">Level complete</h2>
+          <button type="button" id="next" class="hub-button">Next level</button>
+        </div>
+      </div>
+    </section>
+
+    <dialog id="settings" class="panel">
+      <form method="dialog" class="panel-close"><button aria-label="Close settings">✕</button></form>
+      <h2 id="settings-heading">Settings</h2>
+      <section>
+        <h3>Arrows</h3>
+        <div class="choice" role="radiogroup" aria-label="Arrow colors">
+          <button type="button" data-colors="black" role="radio">Black on white</button>
+          <button type="button" data-colors="white" role="radio">White on black</button>
+        </div>
+        <label class="row">Night mode (warm, no blue light) <input type="checkbox" id="night" /></label>
+      </section>
+      <section>
+        <h3>Sound</h3>
+        <label class="row">Sounds <input type="checkbox" id="sound-on" /></label>
+      </section>
+    </dialog>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
