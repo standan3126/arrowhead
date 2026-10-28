@@ -10,37 +10,34 @@
     <link rel="stylesheet" href="css/game.css" />
   </head>
   <body>
-    <main id="home" class="screen">
-      <header class="home-head">
+    <main id="home" class="hub-launch">
+      <header class="hub-launch-head">
         <h1>Arrowhead</h1>
-        <p class="soft">Tap an arrow with a clear way out. Clear the whole picture.</p>
+        <p>Tap an arrow with a clear way out. Clear the whole picture.</p>
       </header>
-      <div class="paths">
-        <div class="path">
-          <button type="button" class="path-card" id="play-simple">
-            <span class="path-name">Simple Arrows</span>
-            <span class="path-level" id="simple-level">Level 1</span>
-          </button>
-          <button type="button" class="replay-link" id="simple-replay" hidden>Replay a level</button>
-        </div>
-        <div class="path">
-          <button type="button" class="path-card path-native" id="play-native">
-            <span class="path-name">Arrowhead</span>
-            <span class="path-level" id="native-level">Level 1</span>
-          </button>
-          <button type="button" class="replay-link" id="native-replay" hidden>Replay a level</button>
-        </div>
+      <div class="paths" role="radiogroup" aria-label="Which path">
+        <button type="button" class="path-card" id="pick-simple" role="radio" data-path="simple">
+          <span class="path-name">Simple Arrows</span>
+          <span class="path-level" id="simple-level">Level 1</span>
+        </button>
+        <button type="button" class="path-card path-native" id="pick-native" role="radio" data-path="native">
+          <span class="path-name">Arrowhead</span>
+          <span class="path-level" id="native-level">Level 1</span>
+        </button>
       </div>
       <p class="wallet"><span class="coin" aria-hidden="true"></span><span id="home-coins">0</span> coins</p>
-      <button type="button" class="pill" id="home-settings">Settings</button>
+      <div class="hub-launch-actions">
+        <button type="button" class="hub-play" id="play-path">Play</button>
+        <button type="button" class="hub-levels" id="levels" hidden>Levels</button>
+      </div>
     </main>
 
     <dialog id="replay" class="replay">
       <header class="replay-head">
-        <h2 id="replay-title">Replay</h2>
+        <h2 id="replay-title">Levels</h2>
         <button type="button" id="replay-close" class="round" aria-label="Close">✕</button>
       </header>
-      <p class="soft">Play a finished level again. It pays coins the same way.</p>
+      <p class="soft">Pick up where you are, or play a finished level again. Old levels pay coins the same way.</p>
       <div id="replay-levels" class="replay-levels"></div>
     </dialog>
 
@@ -49,9 +46,8 @@
       <div class="top-bar">
         <div class="top-info">
           <p class="level-label"><span id="level-name">Level 1</span> · <span id="left">0</span> left</p>
-          <p class="coins-label"><span class="coin" aria-hidden="true"></span><span id="coins">0</span></p>
+          <p class="coins-label"><span id="replay-tag" class="replay-tag" hidden>Replay</span><span class="coin" aria-hidden="true"></span><span id="coins">0</span></p>
         </div>
-        <button type="button" id="play-settings" class="round" aria-label="Settings">⚙</button>
       </div>
       <div id="coach" class="coach" hidden>
         <p id="coach-text"></p>
@@ -59,7 +55,6 @@
       </div>
       <p id="toast" class="toast" role="status"></p>
       <nav class="bottom-bar">
-        <button type="button" id="go-home" class="tool"><span aria-hidden="true">⌂</span>Levels</button>
         <button type="button" id="undo" class="tool"><span aria-hidden="true">↶</span>Undo</button>
         <button type="button" id="hint" class="tool"><span aria-hidden="true">✦</span>Hint <small id="hint-price"></small></button>
         <button type="button" id="burn" class="tool" aria-pressed="false"><span aria-hidden="true">🔥</span>Burn <small id="burn-price"></small></button>
@@ -70,7 +65,7 @@
           <h2 id="done-title">Level complete</h2>
           <p id="done-coins" class="soft"></p>
           <button type="button" id="next" class="hub-button">Next level</button>
-          <button type="button" id="done-home" class="pill done-home">Levels</button>
+          <button type="button" id="done-home" class="pill done-home">Home</button>
         </div>
       </div>
     </section>

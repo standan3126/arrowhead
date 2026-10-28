@@ -2,7 +2,7 @@
 // engine.js, the levels in levels.js, the drawing in board-view.js. Settings use the toolbox's
 // shared panel (/shared/v1/settings.js), laid out like every other GameHub game.
 
-import { addExitButton, setupPage, tapToStart, warmOffline } from '/shared/v1/kit.js'
+import { gameFrame, setupPage, tapToStart, warmOffline } from '/shared/v1/kit.js'
 import { gameStore } from '/shared/v1/save.js'
 import { SettingsPanel, choice, toggle } from '/shared/v1/settings.js'
 import { Sound } from '/shared/v1/sound/index.js'
@@ -43,7 +43,8 @@ const TIPS = [
 ]
 
 // Save format v2: coins, meter (arrows toward the next coin), free power-ups, the level reached on
-// each path, a half-played board (board) and a half-played replay of an older level (replay).
+// each path, the path picked on the home page (path), a half-played board (board) and a
+// half-played replay of an older level (replay).
 // v1 (coins paid per arrow) upgrades by starting the wallet fresh with the starter freebies;
 // levels and tips are kept. The user chose this on 2026-10-27, when only they had played.
 const NEW_SAVE = () => ({
@@ -52,6 +53,7 @@ const NEW_SAVE = () => ({
   meter: 0,
   free: { ...STARTER_FREE },
   paths: { simple: { level: 1 }, native: { level: 1 } },
+  path: 'simple',
   board: null,
   replay: null,
   tips: [],
@@ -65,6 +67,8 @@ function load() {
     saved.coins = 0
     delete saved.starter
   }
+  // Saves from before the path choice: the path of the half-played board, if there is one.
+  if (!saved.path && saved.board?.path) saved.path = saved.board.path
   save = { ...NEW_SAVE(), ...saved, paths: { ...NEW_SAVE().paths, ...saved.paths }, free: { ...STARTER_FREE, ...saved.free } }
 }
 load()
@@ -82,7 +86,15 @@ const sound = new Sound({ notes: 0.7, nature: 0.5, music: 0.35 })
 
 const $ = (id) => document.getElementById(id)
 setupPage()
-addExitButton({ beforeExit: saveGame })
+// Hub (home page) or Home (playing) top left, the Settings gear top right: the toolbox frame.
+const frame = gameFrame({
+  onSettings: () => settingsPanel.open(),
+  beforeExit: saveGame,
+  onHome: () => {
+    saveGame()
+    showHome()
+  },
+})
 
 // --- Looks -------------------------------------------------------------------------------------
 
@@ -181,10 +193,13 @@ function showHome() {
   $('done').hidden = true
   $('play').hidden = true
   $('home').hidden = false
+  frame.setPage('launch')
   for (const path of ['simple', 'native']) {
     $(`${path}-level`).textContent = `Level ${save.paths[path].level}`
-    $(`${path}-replay`).hidden = save.paths[path].level < 2
+    $(`pick-${path}`).setAttribute('aria-checked', String(save.path === path))
   }
+  // Levels shows once the picked path has been started.
+  $('levels').hidden = save.paths[save.path].level < 2
   showCoins()
   applyTheme()
 }
@@ -216,7 +231,9 @@ function startLevel(path, n) {
   $('home').hidden = true
   $('play').hidden = false
   $('done').hidden = true
-  $('level-name').textContent = isReplay(path, n) ? `Level ${n} (replay)` : `Level ${n}`
+  frame.setPage('play')
+  $('level-name').textContent = `Level ${n}`
+  $('replay-tag').hidden = !isReplay(path, n)
   applyTheme()
   view.setBoard(board)
   showLeft()
@@ -421,23 +438,32 @@ $('undo').addEventListener('click', () => {
 
 $('next').addEventListener('click', () => startLevel(current.path, current.n + 1))
 $('fit').addEventListener('click', () => view.fit())
-for (const id of ['go-home', 'done-home'])
-  $(id).addEventListener('click', () => {
+$('done-home').addEventListener('click', () => {
+  saveGame()
+  showHome()
+})
+
+// Home page: pick a path, then Play (the level reached) or Levels (any level so far).
+for (const path of ['simple', 'native'])
+  $(`pick-${path}`).addEventListener('click', () => {
+    save.path = path
     saveGame()
     showHome()
   })
-$('play-simple').addEventListener('click', () => startLevel('simple', save.paths.simple.level))
-$('play-native').addEventListener('click', () => startLevel('native', save.paths.native.level))
+$('play-path').addEventListener('click', () => startLevel(save.path, save.paths[save.path].level))
+$('levels').addEventListener('click', () => showLevels(save.path))
 
-// Replay: any finished level, newest first. It pays coins the same way.
-function showReplay(path) {
+// Levels: the level reached first, then every finished one, newest first. Old ones pay coins the
+// same way.
+function showLevels(path) {
   const list = $('replay-levels')
-  const top = save.paths[path].level - 1
+  const reached = save.paths[path].level
   list.replaceChildren(
-    ...Array.from({ length: top }, (_, i) => {
-      const n = top - i
+    ...Array.from({ length: reached }, (_, i) => {
+      const n = reached - i
       const b = Object.assign(document.createElement('button'), { type: 'button', className: 'replay-level', textContent: n })
-      b.setAttribute('aria-label', `Level ${n}`)
+      b.setAttribute('aria-label', n === reached ? `Level ${n}, where you are` : `Level ${n}`)
+      if (n === reached) b.setAttribute('aria-current', 'true')
       b.addEventListener('click', () => {
         $('replay').close()
         startLevel(path, n)
@@ -445,17 +471,10 @@ function showReplay(path) {
       return b
     }),
   )
-  $('replay-title').textContent = path === 'simple' ? 'Replay Simple Arrows' : 'Replay Arrowhead'
+  $('replay-title').textContent = path === 'simple' ? 'Simple Arrows levels' : 'Arrowhead levels'
   $('replay').showModal()
 }
-$('simple-replay').addEventListener('click', () => showReplay('simple'))
-$('native-replay').addEventListener('click', () => showReplay('native'))
 $('replay-close').addEventListener('click', () => $('replay').close())
-
-// --- Settings ----------------------------------------------------------------------------------
-
-$('home-settings').addEventListener('click', () => settingsPanel.open())
-$('play-settings').addEventListener('click', () => settingsPanel.open())
 
 // --- Start -------------------------------------------------------------------------------------
 

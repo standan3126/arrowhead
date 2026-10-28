@@ -32,8 +32,19 @@ test('level 1 can be played to the end by tapping, then level 2 starts', async (
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))
   await start(page)
-  await expect(page.locator('.hub-exit')).toBeVisible()
-  await page.locator('#play-simple').click()
+  // The toolbox frame: Hub top left and the gear top right on the home page; Home while playing.
+  await expect(page.getByRole('button', { name: 'Exit to GameHub' })).toBeVisible()
+  await expect(page.locator('.hub-gear')).toBeVisible()
+  await expect(page.locator('#levels')).toBeHidden()
+  const gear = await page.locator('.hub-gear').boundingBox()
+  await page.locator('#play-path').click()
+  await expect(page.getByRole('button', { name: 'Exit to GameHub' })).toBeHidden()
+  expect(await page.locator('.hub-gear').boundingBox()).toEqual(gear) // never moves
+  // The level label stays clear of Home and the gear, even on a small phone.
+  const label = await page.locator('.level-label').boundingBox()
+  const home = await page.locator('.hub-corner', { hasText: 'Home' }).boundingBox()
+  expect(label.x).toBeGreaterThan(home.x + home.width)
+  expect(label.x + label.width).toBeLessThan(gear.x)
   await expect(page.locator('#level-name')).toHaveText('Level 1')
   for (let i = 0; i < 40; i++) {
     const id = await freeArrow(page)
@@ -44,8 +55,9 @@ test('level 1 can be played to the end by tapping, then level 2 starts', async (
   await expect(page.locator('#done-title')).toHaveText('Level 1 complete')
   await page.locator('#next').click()
   await expect(page.locator('#level-name')).toHaveText('Level 2')
-  await page.locator('#go-home').click()
+  await page.locator('.hub-corner', { hasText: 'Home' }).click()
   await expect(page.locator('#simple-level')).toHaveText('Level 2')
+  await expect(page.locator('#levels')).toBeVisible()
   expect(errors).toEqual([])
 })
 
@@ -98,7 +110,7 @@ test('pinch and drag move the board; See all puts it back', async ({ page }) => 
 
 test('shared Settings panel: light, colors, music, remembered after a reload', async ({ page }) => {
   await start(page)
-  await page.locator('#home-settings').click()
+  await page.locator('.hub-gear').click()
   const panel = page.locator('dialog.hub-settings')
   await expect(panel).toBeVisible()
   // Same order as every GameHub game: a few open sections, the rest folded away.
@@ -128,7 +140,9 @@ test('old settings ({ night, sound }) move to the shared names', async ({ page }
 
 test('Arrowhead path: stone look, heavy arrows slide and stay, undo, Calm mode', async ({ page }) => {
   await start(page)
-  await page.locator('#play-native').click()
+  await page.locator('#pick-native').click()
+  await expect(page.locator('#pick-native')).toHaveAttribute('aria-checked', 'true')
+  await page.locator('#play-path').click()
   await expect(page.locator('#level-name')).toHaveText('Level 1')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'native')
   expect(await page.evaluate(() => window.arrowhead.view.native)).toBe(true)
@@ -149,19 +163,22 @@ test('Arrowhead path: stone look, heavy arrows slide and stay, undo, Calm mode',
   expect(await page.evaluate((id) => JSON.stringify(window.arrowhead.current.board.arrows[id].cells), heavy[0])).toBe(before)
 
   // Calm mode: from the next level started, heavy arrows bounce back.
-  await page.locator('#play-settings').click()
+  await page.locator('.hub-gear').click()
   await page.locator('dialog.hub-settings').getByText('Calm mode').click()
   await page.locator('.hub-settings-close').click()
   await page.evaluate(() => window.arrowhead.startLevel('native', 31))
   expect(await page.evaluate(() => window.arrowhead.current.board.heavyRules)).toBe(false)
-  await page.locator('#go-home').click()
+  await page.locator('.hub-corner', { hasText: 'Home' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'black')
+  // The picked path is remembered.
+  await page.reload()
+  await expect(page.locator('#pick-native')).toHaveAttribute('aria-checked', 'true')
 })
 
 test('coins: one per 10 arrows, once each; free Hints and Burns first, then coins; undo gives a Burn back', async ({ page }) => {
   await start(page)
   await expect(page.locator('#home-coins')).toHaveText('0')
-  await page.locator('#play-simple').click()
+  await page.locator('#play-path').click()
   await expect(page.locator('#coach')).toBeVisible() // the first lesson
   await page.locator('#coach-ok').click()
   await expect(page.locator('#hint-price')).toHaveText('3 free')
@@ -226,9 +243,9 @@ test('old saves start the wallet fresh; level 10 gives a free Hint; old levels c
   await start(page)
   const save = () => page.evaluate(() => JSON.parse(JSON.stringify(window.arrowhead.save)))
   expect(await save()).toMatchObject({ v: 2, coins: 0, meter: 0, free: { hint: 3, burn: 2 }, paths: { simple: { level: 10 } } })
-  await expect(page.locator('#native-replay')).toBeHidden()
+  await expect(page.locator('#levels')).toBeVisible()
 
-  await page.locator('#play-simple').click()
+  await page.locator('#play-path').click()
   await clearBoard(page)
   await expect(page.locator('#done-coins')).toContainText('A free Hint')
   expect(await save()).toMatchObject({ free: { hint: 4 }, paths: { simple: { level: 11 } } })
@@ -236,10 +253,12 @@ test('old saves start the wallet fresh; level 10 gives a free Hint; old levels c
   expect((await save()).coins * 10 + (await save()).meter).toBe(arrows)
 
   await page.locator('#done-home').click()
-  await page.locator('#simple-replay').click()
-  await expect(page.locator('.replay-level')).toHaveCount(10)
+  await page.locator('#levels').click()
+  await expect(page.locator('.replay-level')).toHaveCount(11) // where you are, and 10 finished
+  await expect(page.locator('.replay-level').first()).toHaveAttribute('aria-current', 'true')
   await page.getByRole('button', { name: 'Level 3', exact: true }).click()
-  await expect(page.locator('#level-name')).toHaveText('Level 3 (replay)')
+  await expect(page.locator('#level-name')).toHaveText('Level 3')
+  await expect(page.locator('#replay-tag')).toBeVisible()
   const before = (await save()).coins * 10 + (await save()).meter
   await clearBoard(page)
   const level3 = await page.evaluate(() => window.arrowhead.current.board.arrows.length)
@@ -254,7 +273,7 @@ test('transfer code carries levels and coins; hidden tools set progress', async 
     window.arrowhead.save.coins = 77
     window.arrowhead.save.paths.simple.level = 9
   })
-  await page.locator('#home-settings').click()
+  await page.locator('.hub-gear').click()
   const panel = page.locator('dialog.hub-settings')
   await panel.getByText('Move your progress').click()
   await panel.getByRole('button', { name: 'Get transfer code' }).click()
@@ -265,7 +284,7 @@ test('transfer code carries levels and coins; hidden tools set progress', async 
   await page.reload()
   await page.locator('.hub-start').click()
   await expect(page.locator('#home-coins')).toHaveText('0')
-  await page.locator('#home-settings').click()
+  await page.locator('.hub-gear').click()
   await panel.getByText('Move your progress').click()
   await panel.getByRole('button', { name: 'Enter a code' }).click()
   await panel.locator('.hub-code').fill(code)
