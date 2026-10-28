@@ -25,6 +25,7 @@ html[data-theme='white'] {
   --accent: #f4f4f4;
   --accent-ink: #141414;
   --hub-topbar: #141414;
+  --hub-veil: rgba(20, 20, 20, 0.7);
   color-scheme: dark;
 }
 
@@ -53,6 +54,7 @@ html[data-theme='night'] {
   --accent: #e8913f;
   --accent-ink: #1a0e06;
   --hub-topbar: #1a0e06;
+  --hub-veil: rgba(26, 14, 6, 0.7);
   color-scheme: dark;
 }
 

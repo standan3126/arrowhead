@@ -120,6 +120,10 @@ const settingsPanel = new SettingsPanel({
       return `Set: Simple Arrows ${simple}, Arrowhead ${native}, ${coins} coins.`
     },
   },
+  credits: [
+    'Arrowhead was made for GameHub: the puzzles, the shapes and the drawings were all made for this game.',
+    'Every sound and all the music are made in code by the GameHub toolbox. Nothing is borrowed.',
+  ],
   onChange: () => applyTheme(),
   beforeExport: saveGame,
   onRestore: () => {
