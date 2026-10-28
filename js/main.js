@@ -1,14 +1,16 @@
-// Arrowhead: screens, settings, coins, power-ups, saves and the GameHub pieces. The rules are in
-// engine.js, the levels in levels.js, the drawing in board-view.js.
+// Arrowhead: screens, coins, power-ups, saves and the GameHub pieces. The rules are in
+// engine.js, the levels in levels.js, the drawing in board-view.js. Settings use the toolbox's
+// shared panel (/shared/v1/settings.js), laid out like every other GameHub game.
 
 import { addExitButton, setupPage, tapToStart, warmOffline } from '/shared/v1/kit.js'
-import { gameStore, makeTransferCode, openBackupFile, readTransferCode, saveBackupFile } from '/shared/v1/save.js'
-import { hiddenUnlock } from '/shared/v1/secret.js'
+import { gameStore } from '/shared/v1/save.js'
+import { SettingsPanel, choice, toggle } from '/shared/v1/settings.js'
 import { Sound } from '/shared/v1/sound/index.js'
 import { BoardView } from './board-view.js'
+import { NATIVE_THEMES } from './draw-native.js'
 import { THEMES } from './draw-simple.js'
 import { Board } from './engine.js'
-import { generateLevel } from './levels.js'
+import { HEAVY_FROM, generateLevel } from './levels.js'
 
 const GAME_ID = 'arrowhead'
 const store = gameStore(GAME_ID)
@@ -17,7 +19,8 @@ const store = gameStore(GAME_ID)
 const PRICES = { hint: 10, burn: 30 }
 const STARTER_COINS = 25
 
-// Little lessons, each shown once, from the level given (or when it first happens).
+// Little lessons, each shown once, from the level given (or when it first happens), one per level
+// started, newest first. path: only on that path. Keep them in order of `from`.
 const TIPS = [
   { id: 'tap', from: 1, text: 'Tap an arrow that has a clear way out. It slides off the board. The glowing one is ready to go.' },
   { id: 'coins', from: 2, text: 'Every arrow pays coins as it leaves: 1, 2 or 3, longer arrows pay more.' },
@@ -25,15 +28,19 @@ const TIPS = [
   { id: 'zoom', from: 5, text: 'Pinch to zoom in, drag to move around. “See all” shows the whole board again.' },
   { id: 'hint', from: 7, text: `Can’t find a way out? Hint lights up an arrow that can leave (${PRICES.hint} coins).` },
   { id: 'burn', from: 9, text: `Burn takes away any one arrow, even a stuck one (${PRICES.burn} coins). Undo gives the coins back.` },
+  {
+    id: 'heavy',
+    path: 'native',
+    from: HEAVY_FROM,
+    text: 'New: heavy arrows (dark point, bound shaft). If one is blocked it slides as far as it can and stays there, and may block others. Undo puts it back. Calm mode in Settings turns them off.',
+  },
   { id: 'bump', from: Infinity, text: 'That arrow was blocked, so it bounced back. That’s all: no lives to lose here.' },
 ]
 
 // Save format v1. Any later change must upgrade v1 saves, never drop them.
 const NEW_SAVE = () => ({ v: 1, coins: 0, starter: false, paths: { simple: { level: 1 }, native: { level: 1 } }, board: null, tips: [] })
-const DEFAULT_SETTINGS = { colors: 'black', night: false, sound: true }
 
 let save
-let settings
 function load() {
   const saved = store.get('save', {})
   save = { ...NEW_SAVE(), ...saved, paths: { ...NEW_SAVE().paths, ...saved.paths } }
@@ -41,15 +48,19 @@ function load() {
     save.coins += STARTER_COINS
     save.starter = true
   }
-  settings = { ...DEFAULT_SETTINGS, ...store.get('settings', {}) }
 }
 load()
 const saveGame = () => store.set('save', save)
-const saveSettings = () => store.set('settings', settings)
 saveGame()
 
-const sound = new Sound({ notes: 0.8, nature: 0.5, music: 0 })
-sound.setMuted(!settings.sound)
+// Settings from before the shared panel ({ colors, night, sound }) move to its names.
+const oldSettings = store.get('settings', {})
+if ('night' in oldSettings || 'sound' in oldSettings) {
+  const { night, sound: soundOn, ...rest } = oldSettings
+  store.set('settings', { ...rest, light: night ? 'night' : 'day', muted: soundOn === false })
+}
+
+const sound = new Sound({ notes: 0.7, nature: 0.5, music: 0.35 })
 
 const $ = (id) => document.getElementById(id)
 setupPage()
@@ -59,16 +70,84 @@ addExitButton({ beforeExit: saveGame })
 
 const view = new BoardView($('board'), { onTap: tapArrow })
 
+const settingsPanel = new SettingsPanel({
+  gameId: GAME_ID,
+  store,
+  sound,
+  notesLabel: 'Arrow chimes',
+  defaults: { colors: 'black', calm: false },
+  look: (el, panel) =>
+    el.append(
+      choice({
+        label: 'Simple Arrows colors',
+        value: panel.settings.colors,
+        options: [
+          { value: 'black', label: 'Black on white' },
+          { value: 'white', label: 'White on black' },
+        ],
+        onPick: (colors) => panel.set({ colors }),
+      }),
+    ),
+  sections: [
+    {
+      title: 'Arrowhead path',
+      build: (el, panel) =>
+        el.append(
+          toggle({
+            label: 'Calm mode',
+            hint: 'Heavy arrows bounce back like the rest. Starts with your next level.',
+            checked: panel.settings.calm,
+            onToggle: (calm) => panel.set({ calm }),
+          }),
+        ),
+    },
+  ],
+  manual: {
+    fields: [
+      { id: 'simple', label: 'Simple Arrows level', min: 1, get: () => save.paths.simple.level },
+      { id: 'native', label: 'Arrowhead level', min: 1, get: () => save.paths.native.level },
+      { id: 'coins', label: 'Coins', get: () => save.coins },
+    ],
+    onSet: ({ simple, native, coins }) => {
+      for (const [path, level] of Object.entries({ simple, native })) {
+        if (level !== save.paths[path].level && save.board?.path === path) save.board = null
+        save.paths[path].level = level
+      }
+      save.coins = coins
+      saveGame()
+      showCoins()
+      if (!$('home').hidden) showHome()
+      return `Set: Simple Arrows ${simple}, Arrowhead ${native}, ${coins} coins.`
+    },
+  },
+  onChange: () => applyTheme(),
+  beforeExport: saveGame,
+  onRestore: () => {
+    load()
+    saveGame()
+    current = null
+    showHome()
+  },
+})
+const settings = () => settingsPanel.settings
+
+// The page and board colors: the path being played, and Night (or Auto at night).
 function applyTheme() {
-  const key = settings.night ? 'night' : settings.colors
+  const night = settingsPanel.night
+  const native = current?.path === 'native' && !$('play').hidden
+  let key
+  let theme
+  if (native) {
+    key = night ? 'night' : 'native'
+    theme = NATIVE_THEMES[night ? 'night' : 'day']
+  } else {
+    key = night ? 'night' : settings().colors
+    theme = THEMES[key]
+  }
   document.documentElement.dataset.theme = key
-  document.querySelector('meta[name="theme-color"]').content = THEMES[key].bg
-  view.setTheme(THEMES[key])
-  for (const b of document.querySelectorAll('[data-colors]')) b.setAttribute('aria-checked', String(b.dataset.colors === settings.colors))
-  $('night').checked = settings.night
-  $('sound-on').checked = settings.sound
+  document.querySelector('meta[name="theme-color"]').content = theme.bg
+  view.setTheme(theme, native)
 }
-applyTheme()
 
 // --- Screens -----------------------------------------------------------------------------------
 
@@ -77,7 +156,9 @@ function showHome() {
   $('play').hidden = true
   $('home').hidden = false
   $('simple-level').textContent = `Level ${save.paths.simple.level}`
+  $('native-level').textContent = `Level ${save.paths.native.level}`
   showCoins()
+  applyTheme()
 }
 
 function showCoins() {
@@ -91,19 +172,24 @@ let current = null // { path, n, level, board }
 
 function startLevel(path, n) {
   const level = generateLevel(path, n)
-  const board = new Board(level)
-  if (save.board && save.board.path === path && save.board.n === n) board.restore(save.board)
+  const resume = save.board && save.board.path === path && save.board.n === n ? save.board : null
+  // Calm mode applies from the next level; a half-played board keeps the rules it began with.
+  const heavyRules = resume ? resume.heavyRules !== false : !settings().calm
+  const board = new Board(level, { heavyRules })
+  if (resume) board.restore(resume)
   current = { path, n, level, board }
   setBurning(false)
   $('home').hidden = true
   $('play').hidden = false
   $('done').hidden = true
   $('level-name').textContent = `Level ${n}`
+  applyTheme()
   view.setBoard(board)
   showLeft()
   showCoins()
   if (board.done) return finishLevel()
-  const tip = TIPS.find((t) => n >= t.from && !save.tips.includes(t.id))
+  // The newest lesson that applies comes first (someone who jumped ahead sees what's new here).
+  const tip = TIPS.filter((t) => n >= t.from && (!t.path || t.path === path) && !save.tips.includes(t.id)).at(-1)
   if (tip) coach(tip.id)
   else hideCoach()
 }
@@ -114,7 +200,7 @@ function showLeft() {
 
 function saveBoard() {
   const { path, n, board } = current
-  save.board = board.done ? null : { path, n, ...board.toJSON() }
+  save.board = board.done ? null : { path, n, heavyRules: board.heavyRules, ...board.toJSON() }
   saveGame()
 }
 
@@ -287,110 +373,18 @@ $('go-home').addEventListener('click', () => {
   showHome()
 })
 $('play-simple').addEventListener('click', () => startLevel('simple', save.paths.simple.level))
+$('play-native').addEventListener('click', () => startLevel('native', save.paths.native.level))
 
 // --- Settings ----------------------------------------------------------------------------------
 
-const dialog = $('settings')
-const say = (text) => ($('message').textContent = text)
-const openSettings = () => {
-  say('')
-  $('manual-simple').value = save.paths.simple.level
-  $('manual-coins').value = save.coins
-  dialog.showModal()
-}
-$('home-settings').addEventListener('click', openSettings)
-$('play-settings').addEventListener('click', openSettings)
-for (const b of document.querySelectorAll('[data-colors]')) {
-  b.addEventListener('click', () => {
-    settings.colors = b.dataset.colors
-    settings.night = false
-    saveSettings()
-    applyTheme()
-  })
-}
-$('night').addEventListener('change', (e) => {
-  settings.night = e.target.checked
-  saveSettings()
-  applyTheme()
-})
-$('sound-on').addEventListener('change', (e) => {
-  settings.sound = e.target.checked
-  sound.setMuted(!settings.sound)
-  saveSettings()
-})
-
-// Moving progress: everything this game saved travels together.
-function restore(data) {
-  store.replaceAll(data)
-  load()
-  saveGame()
-  applyTheme()
-  sound.setMuted(!settings.sound)
-  current = null
-  showHome()
-}
-
-const codeBox = $('code')
-$('make-code').addEventListener('click', async () => {
-  saveGame()
-  codeBox.hidden = false
-  $('use-code').hidden = true
-  codeBox.value = makeTransferCode(GAME_ID, store.all())
-  codeBox.select()
-  try {
-    await navigator.clipboard.writeText(codeBox.value)
-    say('Code copied. Paste it into Arrowhead on the other phone or app.')
-  } catch {
-    say('Copy this code, then paste it into Arrowhead on the other phone or app.')
-  }
-})
-$('enter-code').addEventListener('click', () => {
-  codeBox.hidden = false
-  $('use-code').hidden = false
-  codeBox.value = ''
-  codeBox.focus()
-  say('')
-})
-$('use-code').addEventListener('click', () => {
-  try {
-    restore(readTransferCode(codeBox.value, GAME_ID))
-    say('Progress restored.')
-  } catch (e) {
-    say(e.message)
-  }
-})
-$('save-file').addEventListener('click', () => {
-  saveGame()
-  saveBackupFile(GAME_ID, store.all())
-})
-$('load-file').addEventListener('click', async () => {
-  try {
-    restore(await openBackupFile(GAME_ID))
-    say('Progress restored.')
-  } catch (e) {
-    say(e.message)
-  }
-})
-
-// Setting progress by hand, for when a save is lost. Hidden: tap "Settings" 5 times + the code.
-hiddenUnlock($('settings-heading'), { onUnlock: () => ($('manual-section').hidden = false) })
-$('set-manual').addEventListener('click', () => {
-  const level = Math.max(1, Math.floor(Number($('manual-simple').value) || 1))
-  const coins = Math.max(0, Math.floor(Number($('manual-coins').value) || 0))
-  if (level !== save.paths.simple.level && save.board?.path === 'simple') save.board = null
-  save.paths.simple.level = level
-  save.coins = coins
-  saveGame()
-  showCoins()
-  if (!$('home').hidden) showHome()
-  say(`Set: Simple Arrows level ${level}, ${coins} coins.`)
-})
+$('home-settings').addEventListener('click', () => settingsPanel.open())
+$('play-settings').addEventListener('click', () => settingsPanel.open())
 
 // --- Start -------------------------------------------------------------------------------------
 
 showHome()
 // For the tests (and curious grown-ups in the browser console).
-window.arrowhead = { view, startLevel, tapArrow, get current() { return current }, get save() { return save } }
+window.arrowhead = { view, startLevel, tapArrow, settingsPanel, get current() { return current }, get save() { return save } }
 
 tapToStart({ title: 'Arrowhead', subtitle: 'Send every arrow off the board.', onStart: () => sound.unlock() })
 warmOffline('offline-files.json')

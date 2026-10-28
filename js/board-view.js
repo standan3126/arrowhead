@@ -4,6 +4,7 @@
 import { PanZoom } from '/shared/v1/panzoom.js'
 import { headDir, trackOf } from './engine.js'
 import { drawArrow } from './draw-simple.js'
+import { drawNativeArrow } from './draw-native.js'
 
 const M = 0.8 // empty border around the board, in cells
 const MAX_CELL = 72 // screen pixels per cell at the most zoom
@@ -54,9 +55,17 @@ export class BoardView {
     new ResizeObserver(() => this.resize()).observe(canvas)
   }
 
-  setTheme(theme) {
+  // theme: colors (bg, ink, flash...). native: draw stone points instead of plain arrows.
+  setTheme(theme, native = false) {
     this.theme = theme
+    this.native = native
     this.draw()
+  }
+
+  // One arrow, lit up in `color` (a bump, a hint) or in its own colors (color null).
+  drawOne(pts, dir, px, color, heavy) {
+    if (this.native) drawNativeArrow(this.ctx, pts, dir, this.theme, px, { color, heavy })
+    else drawArrow(this.ctx, pts, dir, color ?? this.theme.ink, px)
   }
 
   setBoard(board) {
@@ -197,7 +206,7 @@ export class BoardView {
 
     for (const a of board.arrows) {
       if (a.gone || this.anims.has(a.id)) continue
-      let color = theme.ink
+      let color = null
       const lit = this.flashes.get(a.id)
       if (lit && lit > t) {
         color = theme.flash
@@ -209,7 +218,7 @@ export class BoardView {
         more = true
       }
       const pts = a.cells.map(([x, y]) => [x + 0.5 + M, y + 0.5 + M])
-      drawArrow(ctx, pts, headDir(a.cells), color, px)
+      this.drawOne(pts, headDir(a.cells), px, color, a.heavy)
       ctx.globalAlpha = 1
     }
 
@@ -222,7 +231,8 @@ export class BoardView {
       }
       more = true
       const p = e / an.dur
-      let color = theme.ink
+      let color = null
+      const heavy = board.arrows[id].heavy
       const lit = this.flashes.get(id)
       if (lit && lit > t) color = theme.flash
       if (an.kind === 'exit') ctx.globalAlpha = Math.max(0, 1 - p ** 4)
@@ -230,10 +240,10 @@ export class BoardView {
       if (an.kind === 'return') ctx.globalAlpha = p
       if (an.kind === 'burn' || an.kind === 'return') {
         const pts = an.track.map(([x, y]) => [x + 0.5 + M, y + 0.5 + M])
-        drawArrow(ctx, pts, headDir(an.track), an.kind === 'burn' ? theme.flash : color, px)
+        this.drawOne(pts, headDir(an.track), px, an.kind === 'burn' ? theme.flash : color, heavy)
       } else {
         const { pts, dir } = snake(an.track, an.pos(e), an.L)
-        drawArrow(ctx, pts, dir, color, px)
+        this.drawOne(pts, dir, px, color, heavy)
       }
       ctx.globalAlpha = 1
     }

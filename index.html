@@ -6,6 +6,7 @@
     <title>Arrowhead · GameHub</title>
     <meta name="theme-color" content="#faf8f3" />
     <link rel="stylesheet" href="/shared/v1/kit.css" />
+    <link rel="stylesheet" href="/shared/v1/settings.css" />
     <link rel="stylesheet" href="css/game.css" />
   </head>
   <body>
@@ -19,10 +20,10 @@
           <span class="path-name">Simple Arrows</span>
           <span class="path-level" id="simple-level">Level 1</span>
         </button>
-        <div class="path-card path-soon" aria-disabled="true">
+        <button type="button" class="path-card path-native" id="play-native">
           <span class="path-name">Arrowhead</span>
-          <span class="path-level">Coming soon</span>
-        </div>
+          <span class="path-level" id="native-level">Level 1</span>
+        </button>
       </div>
       <p class="wallet"><span class="coin" aria-hidden="true"></span><span id="home-coins">0</span> coins</p>
       <button type="button" class="pill" id="home-settings">Settings</button>
@@ -57,42 +58,6 @@
         </div>
       </div>
     </section>
-
-    <dialog id="settings" class="panel">
-      <form method="dialog" class="panel-close"><button aria-label="Close settings">✕</button></form>
-      <h2 id="settings-heading">Settings</h2>
-      <section>
-        <h3>Arrows</h3>
-        <div class="choice" role="radiogroup" aria-label="Arrow colors">
-          <button type="button" data-colors="black" role="radio">Black on white</button>
-          <button type="button" data-colors="white" role="radio">White on black</button>
-        </div>
-        <label class="row">Night mode (warm, no blue light) <input type="checkbox" id="night" /></label>
-      </section>
-      <section>
-        <h3>Sound</h3>
-        <label class="row">Sounds <input type="checkbox" id="sound-on" /></label>
-      </section>
-      <section>
-        <h3>Move your progress</h3>
-        <p class="soft small">Carry your levels and coins to another phone or app.</p>
-        <div class="buttons">
-          <button type="button" id="make-code">Get transfer code</button>
-          <button type="button" id="enter-code">Enter a code</button>
-          <button type="button" id="save-file">Save backup file</button>
-          <button type="button" id="load-file">Load backup file</button>
-        </div>
-        <textarea id="code" rows="3" placeholder="Transfer code" hidden></textarea>
-        <button type="button" id="use-code" class="small-button" hidden>Use this code</button>
-      </section>
-      <section id="manual-section" hidden>
-        <h3>Set progress by hand</h3>
-        <label class="row">Simple Arrows level <input type="number" id="manual-simple" min="1" inputmode="numeric" /></label>
-        <label class="row">Coins <input type="number" id="manual-coins" min="0" inputmode="numeric" /></label>
-        <button type="button" id="set-manual" class="small-button">Set</button>
-      </section>
-      <p id="message" role="status" class="message"></p>
-    </dialog>
 
     <script type="module" src="js/main.js"></script>
   </body>

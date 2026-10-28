@@ -28,6 +28,20 @@ html[data-theme='white'] {
   color-scheme: dark;
 }
 
+/* The Arrowhead path by day: plain warm sand. Keep in step with NATIVE_THEMES in draw-native.js. */
+html[data-theme='native'] {
+  --bg: #efe4cd;
+  --ink: #3e2c1c;
+  --soft: #7b6a55;
+  --panel: rgba(250, 243, 230, 0.93);
+  --panel-solid: #f8f0e0;
+  --line: rgba(62, 44, 28, 0.16);
+  --accent: #8a4b26;
+  --accent-ink: #fbf3e4;
+  --hub-topbar: #efe4cd;
+  color-scheme: light;
+}
+
 /* Night: warm colors only. */
 html[data-theme='night'] {
   --bg: #1a0e06;
@@ -51,6 +65,7 @@ html[data-theme] {
   --hub-line: var(--line);
   --hub-accent: var(--accent);
   --hub-accent-ink: var(--accent-ink);
+  --hub-panel-solid: var(--panel-solid);
 }
 
 body {
@@ -143,9 +158,14 @@ button {
   color: var(--soft);
 }
 
-.path-soon {
-  opacity: 0.55;
-  cursor: default;
+.path-native .path-name::after {
+  content: '';
+  display: inline-block;
+  width: 0.9em;
+  height: 0.6em;
+  margin-left: 0.4em;
+  background: #77706a;
+  clip-path: polygon(100% 50%, 0 0, 22% 50%, 0 100%);
 }
 
 .pill {
@@ -362,152 +382,6 @@ button {
 
 .done-card h2 {
   margin: 0 0 18px;
-}
-
-/* --- Settings -------------------------------------------------------------------------------- */
-
-.panel {
-  width: min(440px, calc(100vw - 24px));
-  max-height: calc(100dvh - 40px);
-  border: 1px solid var(--line);
-  border-radius: var(--hub-radius);
-  padding: 20px;
-  background: var(--panel-solid);
-  color: var(--ink);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
-  box-sizing: border-box;
-}
-
-.panel::backdrop {
-  background: rgba(20, 12, 6, 0.45);
-}
-
-.panel h2 {
-  margin: 0 0 8px;
-}
-
-.panel h3 {
-  margin: 18px 0 8px;
-  font-size: 1rem;
-}
-
-.panel-close {
-  float: right;
-}
-
-.panel-close button {
-  width: 40px;
-  height: 40px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--line);
-  cursor: pointer;
-}
-
-.row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  min-height: 44px;
-}
-
-.row input[type='checkbox'] {
-  width: 22px;
-  height: 22px;
-  accent-color: var(--accent);
-}
-
-.choice {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.choice button {
-  min-height: 44px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: transparent;
-  cursor: pointer;
-}
-
-.choice button[aria-checked='true'] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-
-.small {
-  font-size: 0.9rem;
-  margin: 0 0 8px;
-}
-
-.buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.buttons button,
-.small-button {
-  min-height: 42px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: transparent;
-  font-size: 0.92rem;
-  cursor: pointer;
-}
-
-.small-button {
-  margin-top: 8px;
-}
-
-#code {
-  width: 100%;
-  box-sizing: border-box;
-  margin-top: 8px;
-  padding: 8px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--ink);
-  font: 0.8rem ui-monospace, monospace;
-}
-
-.row input[type='number'] {
-  width: 100px;
-  font: inherit;
-  padding: 8px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--ink);
-}
-
-.message {
-  min-height: 1.4em;
-  margin: 12px 0 0;
-  color: var(--soft);
-}
-
-.hub-secret {
-  display: flex;
-  gap: 8px;
-  margin: 8px 0;
-}
-
-.hub-secret input {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-  padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--ink);
 }
 
 @media (prefers-reduced-motion: reduce) {
