@@ -15,19 +15,24 @@ import { HEAVY_FROM, generateLevel } from './levels.js'
 const GAME_ID = 'arrowhead'
 const store = gameStore(GAME_ID)
 
-// Coins: every arrow pays 1, 2 or 3 by length (engine.js coinsFor). First guesses, to balance.
+// Coins: one for every 10 arrows cleared (leftover arrows carry on to the next level). Each
+// arrow counts once per board, so undo can't farm them. Replaying an old level pays the same.
+const ARROWS_PER_COIN = 10
 const PRICES = { hint: 10, burn: 30 }
-const STARTER_COINS = 25
+// A few free power-ups to start, used before coins (like Momahjong's starter pack), and a free
+// Hint for every 10th level finished on either path.
+const STARTER_FREE = { hint: 3, burn: 2 }
+const GIFT_EVERY = 10
 
 // Little lessons, each shown once, from the level given (or when it first happens), one per level
 // started, newest first. path: only on that path. Keep them in order of `from`.
 const TIPS = [
   { id: 'tap', from: 1, text: 'Tap an arrow that has a clear way out. It slides off the board. The glowing one is ready to go.' },
-  { id: 'coins', from: 2, text: 'Every arrow pays coins as it leaves: 1, 2 or 3, longer arrows pay more.' },
+  { id: 'coins', from: 2, text: 'Every 10 arrows you clear earn a coin. Old levels can be played again for more.' },
   { id: 'undo', from: 3, text: 'Undo takes back your last move. It’s always free, as many times as you like.' },
   { id: 'zoom', from: 5, text: 'Pinch to zoom in, drag to move around. “See all” shows the whole board again.' },
-  { id: 'hint', from: 7, text: `Can’t find a way out? Hint lights up an arrow that can leave (${PRICES.hint} coins).` },
-  { id: 'burn', from: 9, text: `Burn takes away any one arrow, even a stuck one (${PRICES.burn} coins). Undo gives the coins back.` },
+  { id: 'hint', from: 7, text: `Can’t find a way out? Hint lights up an arrow that can leave. You have a few free; then they cost ${PRICES.hint} coins.` },
+  { id: 'burn', from: 9, text: `Burn takes away any one arrow, even a stuck one. A few are free; then ${PRICES.burn} coins. Undo gives it back.` },
   {
     id: 'heavy',
     path: 'native',
@@ -37,17 +42,30 @@ const TIPS = [
   { id: 'bump', from: Infinity, text: 'That arrow was blocked, so it bounced back. That’s all: no lives to lose here.' },
 ]
 
-// Save format v1. Any later change must upgrade v1 saves, never drop them.
-const NEW_SAVE = () => ({ v: 1, coins: 0, starter: false, paths: { simple: { level: 1 }, native: { level: 1 } }, board: null, tips: [] })
+// Save format v2: coins, meter (arrows toward the next coin), free power-ups, the level reached on
+// each path, a half-played board (board) and a half-played replay of an older level (replay).
+// v1 (coins paid per arrow) upgrades by starting the wallet fresh with the starter freebies;
+// levels and tips are kept. The user chose this on 2026-10-27, when only they had played.
+const NEW_SAVE = () => ({
+  v: 2,
+  coins: 0,
+  meter: 0,
+  free: { ...STARTER_FREE },
+  paths: { simple: { level: 1 }, native: { level: 1 } },
+  board: null,
+  replay: null,
+  tips: [],
+})
 
 let save
 function load() {
   const saved = store.get('save', {})
-  save = { ...NEW_SAVE(), ...saved, paths: { ...NEW_SAVE().paths, ...saved.paths } }
-  if (!save.starter) {
-    save.coins += STARTER_COINS
-    save.starter = true
+  if (saved.v === 1) {
+    saved.v = 2
+    saved.coins = 0
+    delete saved.starter
   }
+  save = { ...NEW_SAVE(), ...saved, paths: { ...NEW_SAVE().paths, ...saved.paths }, free: { ...STARTER_FREE, ...saved.free } }
 }
 load()
 const saveGame = () => store.set('save', save)
@@ -107,13 +125,16 @@ const settingsPanel = new SettingsPanel({
       { id: 'simple', label: 'Simple Arrows level', min: 1, get: () => save.paths.simple.level },
       { id: 'native', label: 'Arrowhead level', min: 1, get: () => save.paths.native.level },
       { id: 'coins', label: 'Coins', get: () => save.coins },
+      { id: 'hints', label: 'Free hints', get: () => save.free.hint },
+      { id: 'burns', label: 'Free burns', get: () => save.free.burn },
     ],
-    onSet: ({ simple, native, coins }) => {
+    onSet: ({ simple, native, coins, hints, burns }) => {
       for (const [path, level] of Object.entries({ simple, native })) {
         if (level !== save.paths[path].level && save.board?.path === path) save.board = null
         save.paths[path].level = level
       }
       save.coins = coins
+      save.free = { hint: hints, burn: burns }
       saveGame()
       showCoins()
       if (!$('home').hidden) showHome()
@@ -157,10 +178,13 @@ function applyTheme() {
 
 function showHome() {
   setBurning(false)
+  $('done').hidden = true
   $('play').hidden = true
   $('home').hidden = false
-  $('simple-level').textContent = `Level ${save.paths.simple.level}`
-  $('native-level').textContent = `Level ${save.paths.native.level}`
+  for (const path of ['simple', 'native']) {
+    $(`${path}-level`).textContent = `Level ${save.paths[path].level}`
+    $(`${path}-replay`).hidden = save.paths[path].level < 2
+  }
   showCoins()
   applyTheme()
 }
@@ -168,25 +192,31 @@ function showHome() {
 function showCoins() {
   $('coins').textContent = save.coins
   $('home-coins').textContent = save.coins
-  $('hint-price').textContent = PRICES.hint
-  $('burn-price').textContent = PRICES.burn
+  // The buttons show free ones left, else the price.
+  $('hint-price').textContent = save.free.hint ? `${save.free.hint} free` : PRICES.hint
+  $('burn-price').textContent = save.free.burn ? `${save.free.burn} free` : PRICES.burn
 }
+
+// A replay is a level below the one reached; it keeps its own half-played board.
+const isReplay = (path, n) => n < save.paths[path].level
+const slot = (path, n) => (isReplay(path, n) ? 'replay' : 'board')
 
 let current = null // { path, n, level, board }
 
 function startLevel(path, n) {
   const level = generateLevel(path, n)
-  const resume = save.board && save.board.path === path && save.board.n === n ? save.board : null
+  const kept = save[slot(path, n)]
+  const resume = kept && kept.path === path && kept.n === n ? kept : null
   // Calm mode applies from the next level; a half-played board keeps the rules it began with.
   const heavyRules = resume ? resume.heavyRules !== false : !settings().calm
   const board = new Board(level, { heavyRules })
   if (resume) board.restore(resume)
-  current = { path, n, level, board }
+  current = { path, n, level, board, earned: resume?.earned ?? 0 }
   setBurning(false)
   $('home').hidden = true
   $('play').hidden = false
   $('done').hidden = true
-  $('level-name').textContent = `Level ${n}`
+  $('level-name').textContent = isReplay(path, n) ? `Level ${n} (replay)` : `Level ${n}`
   applyTheme()
   view.setBoard(board)
   showLeft()
@@ -203,8 +233,8 @@ function showLeft() {
 }
 
 function saveBoard() {
-  const { path, n, board } = current
-  save.board = board.done ? null : { path, n, heavyRules: board.heavyRules, ...board.toJSON() }
+  const { path, n, board, earned } = current
+  save[slot(path, n)] = board.done ? null : { path, n, heavyRules: board.heavyRules, earned, ...board.toJSON() }
   saveGame()
 }
 
@@ -258,8 +288,13 @@ function tapArrow(id) {
   view.play(result)
   if (result.kind === 'exit') {
     chimeNext()
-    save.coins += result.coins
-    showCoins()
+    // result.coins > 0 only the first time this arrow leaves on this board.
+    if (result.coins > 0 && ++save.meter >= ARROWS_PER_COIN) {
+      save.meter -= ARROWS_PER_COIN
+      save.coins++
+      current.earned++
+      showCoins()
+    }
   } else {
     sound.soft()
     if (result.kind === 'bump') coach('bump')
@@ -277,21 +312,31 @@ function afterMove() {
 }
 
 function finishLevel() {
-  const { path, n, board } = current
-  if (save.paths[path].level <= n) save.paths[path].level = n + 1
-  save.board = null
+  const { path, n, earned } = current
+  const lines = []
+  if (earned) lines.push(`+${earned} coin${earned > 1 ? 's' : ''}`)
+  lines.push(`${save.meter} of ${ARROWS_PER_COIN} arrows toward the next coin`)
+  if (!isReplay(path, n)) {
+    save.paths[path].level = n + 1
+    if (n % GIFT_EVERY === 0) {
+      save.free.hint++
+      lines.push(`A free Hint for reaching level ${n + 1}!`)
+    }
+  }
+  save[slot(path, n)] = null
   saveGame()
+  showCoins()
   sound.celebrate()
   $('done-title').textContent = `Level ${n} complete`
-  $('done-coins').textContent = board.coins ? `+${board.coins} coins` : ''
+  $('done-coins').replaceChildren(...lines.map((t) => Object.assign(document.createElement('span'), { textContent: t })))
   $('done').hidden = false
 }
 
 // --- Power-ups ---------------------------------------------------------------------------------
 
 function canPay(what) {
-  if (save.coins >= PRICES[what]) return true
-  toast(`${what === 'hint' ? 'Hint' : 'Burn'} costs ${PRICES[what]} coins. Every arrow you clear earns more.`)
+  if (save.free[what] > 0 || save.coins >= PRICES[what]) return true
+  toast(`${what === 'hint' ? 'Hint' : 'Burn'} costs ${PRICES[what]} coins. Every 10 arrows earn one; old levels can be played again.`)
   sound.soft()
   return false
 }
@@ -323,7 +368,8 @@ $('hint').addEventListener('click', () => {
   const id = pickHint()
   if (id === -1) return toast('No arrow can leave right now. Undo or Burn will get it moving.')
   if (!canPay('hint')) return
-  save.coins -= PRICES.hint
+  if (save.free.hint > 0) save.free.hint--
+  else save.coins -= PRICES.hint
   showCoins()
   saveGame()
   sound.ping()
@@ -342,14 +388,16 @@ $('burn').addEventListener('click', () => {
   if (burning) return setBurning(false)
   if (!canPay('burn')) return
   setBurning(true)
-  toast('Tap the arrow to burn. Tap Burn again to keep your coins.')
+  toast(save.free.burn ? 'Tap the arrow to burn. Tap Burn again to keep it.' : 'Tap the arrow to burn. Tap Burn again to keep your coins.')
 })
 
 function burnArrow(id) {
   setBurning(false)
-  const result = current.board.burn(id, PRICES.burn)
+  const free = save.free.burn > 0
+  const result = current.board.burn(id, free ? 0 : PRICES.burn, free)
   if (!result) return
-  save.coins -= PRICES.burn
+  if (free) save.free.burn--
+  else save.coins -= PRICES.burn
   showCoins()
   view.play(result)
   sound.sparkle()
@@ -361,8 +409,9 @@ $('undo').addEventListener('click', () => {
   setBurning(false)
   const result = current.board.undo()
   if (!result) return toast('Back at the start of the level')
-  if (result.k === 'burn' && result.price) {
-    save.coins += result.price
+  if (result.k === 'burn') {
+    if (result.free) save.free.burn++
+    else save.coins += result.price
     showCoins()
   }
   view.play(result)
@@ -372,12 +421,36 @@ $('undo').addEventListener('click', () => {
 
 $('next').addEventListener('click', () => startLevel(current.path, current.n + 1))
 $('fit').addEventListener('click', () => view.fit())
-$('go-home').addEventListener('click', () => {
-  saveGame()
-  showHome()
-})
+for (const id of ['go-home', 'done-home'])
+  $(id).addEventListener('click', () => {
+    saveGame()
+    showHome()
+  })
 $('play-simple').addEventListener('click', () => startLevel('simple', save.paths.simple.level))
 $('play-native').addEventListener('click', () => startLevel('native', save.paths.native.level))
+
+// Replay: any finished level, newest first. It pays coins the same way.
+function showReplay(path) {
+  const list = $('replay-levels')
+  const top = save.paths[path].level - 1
+  list.replaceChildren(
+    ...Array.from({ length: top }, (_, i) => {
+      const n = top - i
+      const b = Object.assign(document.createElement('button'), { type: 'button', className: 'replay-level', textContent: n })
+      b.setAttribute('aria-label', `Level ${n}`)
+      b.addEventListener('click', () => {
+        $('replay').close()
+        startLevel(path, n)
+      })
+      return b
+    }),
+  )
+  $('replay-title').textContent = path === 'simple' ? 'Replay Simple Arrows' : 'Replay Arrowhead'
+  $('replay').showModal()
+}
+$('simple-replay').addEventListener('click', () => showReplay('simple'))
+$('native-replay').addEventListener('click', () => showReplay('native'))
+$('replay-close').addEventListener('click', () => $('replay').close())
 
 // --- Settings ----------------------------------------------------------------------------------
 

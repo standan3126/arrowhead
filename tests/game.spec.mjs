@@ -156,40 +156,94 @@ test('Arrowhead path: stone look, heavy arrows slide and stay, undo, Calm mode',
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'black')
 })
 
-test('coins: start with 25, arrows pay once, Hint and Burn cost, undoing a Burn refunds it', async ({ page }) => {
+test('coins: one per 10 arrows, once each; free Hints and Burns first, then coins; undo gives a Burn back', async ({ page }) => {
   await start(page)
-  await expect(page.locator('#home-coins')).toHaveText('25')
+  await expect(page.locator('#home-coins')).toHaveText('0')
   await page.locator('#play-simple').click()
   await expect(page.locator('#coach')).toBeVisible() // the first lesson
   await page.locator('#coach-ok').click()
-  const coins = () => page.evaluate(() => window.arrowhead.save.coins)
+  await expect(page.locator('#hint-price')).toHaveText('3 free')
+  await expect(page.locator('#burn-price')).toHaveText('2 free')
+  const save = () => page.evaluate(() => JSON.parse(JSON.stringify(window.arrowhead.save)))
+
   const a = await freeArrow(page)
-  const pays = await page.evaluate((a) => window.arrowhead.current.board.arrows[a].cells.length <= 4 ? 1 : 2, a)
   await tapArrow(page, a)
-  expect(await coins()).toBe(25 + pays)
+  expect((await save()).meter).toBe(1)
   await page.locator('#undo').click()
   await tapArrow(page, a)
-  expect(await coins()).toBe(25 + pays) // paid once only
+  expect((await save()).meter).toBe(1) // counted once only
+  await page.evaluate(() => (window.arrowhead.save.meter = 9))
+  await tapArrow(page, await freeArrow(page))
+  expect(await save()).toMatchObject({ meter: 0, coins: 1 })
+  await expect(page.locator('#coins')).toHaveText('1')
 
   await page.locator('#hint').click()
-  expect(await coins()).toBe(15 + pays)
+  expect(await save()).toMatchObject({ coins: 1, free: { hint: 2, burn: 2 } })
+  await expect(page.locator('#hint-price')).toHaveText('2 free')
   const hinted = await page.evaluate(() => window.arrowhead.view.hint)
   expect(await page.evaluate((h) => window.arrowhead.current.board.isFree(h), hinted)).toBe(true)
-  await page.locator('#hint').click() // same hint again: free
-  expect(await coins()).toBe(15 + pays)
+  await page.locator('#hint').click() // same hint again: no charge
+  expect((await save()).free.hint).toBe(2)
 
+  // A free Burn, given back by Undo.
   await page.locator('#burn').click()
-  await expect(page.locator('#toast')).toContainText('costs 30') // not enough coins yet
+  let stuck = await blockedArrow(page)
+  await tapArrow(page, stuck)
+  expect((await save()).free.burn).toBe(1)
+  await page.locator('#undo').click()
+  expect((await save()).free.burn).toBe(2)
+  expect(await page.evaluate((s) => window.arrowhead.current.board.arrows[s].gone, stuck)).toBe(false)
+
+  // No free ones left: Burn costs coins.
+  await page.evaluate(() => (window.arrowhead.save.free.burn = 0))
+  await page.locator('#burn').click()
+  await expect(page.locator('#toast')).toContainText('costs 30') // not enough coins
   await page.evaluate(() => (window.arrowhead.save.coins = 100))
   await page.locator('#burn').click()
   await expect(page.locator('#burn')).toHaveAttribute('aria-pressed', 'true')
-  const stuck = await blockedArrow(page)
+  stuck = await blockedArrow(page)
   await tapArrow(page, stuck)
-  expect(await coins()).toBe(70)
-  expect(await page.evaluate((s) => window.arrowhead.current.board.arrows[s].gone, stuck)).toBe(true)
+  expect((await save()).coins).toBe(70)
   await page.locator('#undo').click()
-  expect(await coins()).toBe(100)
-  expect(await page.evaluate((s) => window.arrowhead.current.board.arrows[s].gone, stuck)).toBe(false)
+  expect((await save()).coins).toBe(100)
+})
+
+const clearBoard = async (page) => {
+  for (let i = 0; i < 400; i++) {
+    const id = await freeArrow(page)
+    if (id === -1) break
+    await page.evaluate((id) => window.arrowhead.tapArrow(id), id)
+  }
+  await expect(page.locator('#done')).toBeVisible()
+}
+
+test('old saves start the wallet fresh; level 10 gives a free Hint; old levels can be replayed', async ({ page }) => {
+  await page.evaluate(() =>
+    localStorage.setItem('arrowhead:save', JSON.stringify({ v: 1, coins: 480, starter: true, paths: { simple: { level: 10 }, native: { level: 1 } }, board: null, tips: ['tap', 'coins', 'undo', 'zoom', 'hint', 'burn'] })),
+  )
+  await start(page)
+  const save = () => page.evaluate(() => JSON.parse(JSON.stringify(window.arrowhead.save)))
+  expect(await save()).toMatchObject({ v: 2, coins: 0, meter: 0, free: { hint: 3, burn: 2 }, paths: { simple: { level: 10 } } })
+  await expect(page.locator('#native-replay')).toBeHidden()
+
+  await page.locator('#play-simple').click()
+  await clearBoard(page)
+  await expect(page.locator('#done-coins')).toContainText('A free Hint')
+  expect(await save()).toMatchObject({ free: { hint: 4 }, paths: { simple: { level: 11 } } })
+  const arrows = await page.evaluate(() => window.arrowhead.current.board.arrows.length)
+  expect((await save()).coins * 10 + (await save()).meter).toBe(arrows)
+
+  await page.locator('#done-home').click()
+  await page.locator('#simple-replay').click()
+  await expect(page.locator('.replay-level')).toHaveCount(10)
+  await page.getByRole('button', { name: 'Level 3', exact: true }).click()
+  await expect(page.locator('#level-name')).toHaveText('Level 3 (replay)')
+  const before = (await save()).coins * 10 + (await save()).meter
+  await clearBoard(page)
+  const level3 = await page.evaluate(() => window.arrowhead.current.board.arrows.length)
+  expect((await save()).coins * 10 + (await save()).meter).toBe(before + level3) // pays the same
+  expect((await save()).paths.simple.level).toBe(11)
+  expect((await save()).free.hint).toBe(4) // no gift for a replay
 })
 
 test('transfer code carries levels and coins; hidden tools set progress', async ({ page }) => {
@@ -207,7 +261,7 @@ test('transfer code carries levels and coins; hidden tools set progress', async 
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   await page.locator('.hub-start').click()
-  await expect(page.locator('#home-coins')).toHaveText('25')
+  await expect(page.locator('#home-coins')).toHaveText('0')
   await page.locator('#home-settings').click()
   await panel.getByRole('button', { name: 'Enter a code' }).click()
   await panel.locator('.hub-code').fill(code)

@@ -179,6 +179,68 @@ button {
   cursor: pointer;
 }
 
+/* Replay a finished level: a small link under each path, and a grid of level numbers. */
+.path {
+  display: grid;
+}
+
+.replay-link {
+  justify-self: end;
+  min-height: 40px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--soft);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.replay-link[hidden] {
+  display: none;
+}
+
+.replay {
+  width: min(420px, calc(100vw - 20px));
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  margin-top: calc(env(safe-area-inset-top) + 12px);
+  padding: 16px 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--hub-radius);
+  background: var(--panel-solid);
+  color: var(--ink);
+  box-sizing: border-box;
+}
+
+.replay::backdrop {
+  background: rgba(20, 14, 8, 0.45);
+}
+
+.replay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.replay-head h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.replay-levels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 8px;
+}
+
+.replay-level {
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* --- Play ------------------------------------------------------------------------------------ */
 
 #board {
@@ -383,6 +445,17 @@ button {
 }
 
 .done-card h2 {
+  margin: 0 0 10px;
+}
+
+.done-home {
+  display: block;
+  margin: 10px auto 0;
+}
+
+#done-coins {
+  display: grid;
+  gap: 4px;
   margin: 0 0 18px;
 }
 

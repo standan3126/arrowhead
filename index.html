@@ -16,18 +16,33 @@
         <p class="soft">Tap an arrow with a clear way out. Clear the whole picture.</p>
       </header>
       <div class="paths">
-        <button type="button" class="path-card" id="play-simple">
-          <span class="path-name">Simple Arrows</span>
-          <span class="path-level" id="simple-level">Level 1</span>
-        </button>
-        <button type="button" class="path-card path-native" id="play-native">
-          <span class="path-name">Arrowhead</span>
-          <span class="path-level" id="native-level">Level 1</span>
-        </button>
+        <div class="path">
+          <button type="button" class="path-card" id="play-simple">
+            <span class="path-name">Simple Arrows</span>
+            <span class="path-level" id="simple-level">Level 1</span>
+          </button>
+          <button type="button" class="replay-link" id="simple-replay" hidden>Replay a level</button>
+        </div>
+        <div class="path">
+          <button type="button" class="path-card path-native" id="play-native">
+            <span class="path-name">Arrowhead</span>
+            <span class="path-level" id="native-level">Level 1</span>
+          </button>
+          <button type="button" class="replay-link" id="native-replay" hidden>Replay a level</button>
+        </div>
       </div>
       <p class="wallet"><span class="coin" aria-hidden="true"></span><span id="home-coins">0</span> coins</p>
       <button type="button" class="pill" id="home-settings">Settings</button>
     </main>
+
+    <dialog id="replay" class="replay">
+      <header class="replay-head">
+        <h2 id="replay-title">Replay</h2>
+        <button type="button" id="replay-close" class="round" aria-label="Close">✕</button>
+      </header>
+      <p class="soft">Play a finished level again. It pays coins the same way.</p>
+      <div id="replay-levels" class="replay-levels"></div>
+    </dialog>
 
     <section id="play" class="screen" hidden>
       <canvas id="board" aria-label="The puzzle board. Tap an arrow to send it off the board."></canvas>
@@ -55,6 +70,7 @@
           <h2 id="done-title">Level complete</h2>
           <p id="done-coins" class="soft"></p>
           <button type="button" id="next" class="hub-button">Next level</button>
+          <button type="button" id="done-home" class="pill done-home">Levels</button>
         </div>
       </div>
     </section>

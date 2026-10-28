@@ -149,14 +149,14 @@ export class Board {
     return { kind: 'bump', id, cells, room, blocker }
   }
 
-  // Remove any arrow, free or not (the Burn power-up). Pays no coins. price is remembered so
-  // undoing the burn can give it back.
-  burn(id, price = 0) {
+  // Remove any arrow, free or not (the Burn power-up). Pays no coins. What it cost (price, or a
+  // free burn) is remembered so undoing the burn can give it back.
+  burn(id, price = 0, free = false) {
     const a = this.arrows[id]
     if (!a || a.gone) return null
     this.lift(a)
     a.gone = true
-    this.history.push({ k: 'burn', id, price })
+    this.history.push(free ? { k: 'burn', id, price, free } : { k: 'burn', id, price })
     return { kind: 'burn', id, cells: a.cells.map((c) => c.slice()) }
   }
 
